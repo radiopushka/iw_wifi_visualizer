@@ -194,8 +194,10 @@ def main():
         channels = indexs_in_range(G2_channels,bar.get_x()+5,bar.get_x()+15)
         overlap = 1
         drw = bar.get_height() - tv
-        while overlap == 1:
+        attempts  = 0;
+        while overlap == 1 and attempts < 1000:
             overlap = 0
+            attempts += 1
             for c in channels:
                 for lid in G2_laps[c]:
                     if are_rectangles_colliding(bar.get_x(),drw,20,tv,bar.get_x(),lid,20,tv):
@@ -236,8 +238,10 @@ def main():
         channels = indexs_in_range(G5_channels,bar.get_x()+5,bar.get_x()+155)
         overlap = 1
         drw = bar.get_height() - tv
-        while overlap == 1:
+        attempts  = 0;
+        while overlap == 1 and attempts < 1000:
             overlap = 0
+            attempts += 1
             for c in channels:
                 for lid in G5_laps[c]:
                     if are_rectangles_colliding(bar.get_x(),drw,160,tv,bar.get_x(),lid,160,tv):
