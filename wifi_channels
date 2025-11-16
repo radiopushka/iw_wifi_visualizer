@@ -121,6 +121,11 @@ BEST_CH=1
 MIN_SCORE="5000"
 CHNUM=1
 for score in ${SCORE_2G[@]}; do
+    if [[ ! -z $3 ]]; then
+        if [[ $CHNUM -ge $3 ]]; then
+            break
+        fi
+    fi
     echo "channel:$CHNUM score:$score"
     if [[ $score -lt $MIN_SCORE ]]; then
         MIN_SCORE=$score
