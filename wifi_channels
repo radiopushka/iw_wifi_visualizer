@@ -131,3 +131,11 @@ for score in ${SCORE_2G[@]}; do
 done
 
 echo "best channel:$BEST_CH"
+
+if [[ ! -z $2 ]]; then
+    CONF_FILE=$(cat "$2")
+    if [[ ! -z $CONF_FILE ]]; then
+        CONF_FILE=$(echo "$CONF_FILE" | sed "s/.*channel=[0-9].*/channel=$BEST_CH/g")
+    fi
+    echo "$CONF_FILE" > "$2"
+fi
