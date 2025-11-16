@@ -1,80 +1,82 @@
 #!/bin/bash
 
 if [[ -z $1 ]]; then
-    echo "Please specify the interface"
-    exit
+  echo "Please specify the interface"
+  exit
 fi
 
-WILE=$(iw dev "$1" scan)
-if [[ -z $WILE ]]; then
+BEST_CHANNEL=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+
+Scan_net() {
+  WILE=$(iw dev "$1" scan)
+  if [[ -z $WILE ]]; then
     exit
-fi
-WILE="${WILE//
+  fi
+  WILE="${WILE//
 BSS /
 ~BSS }"
 
-MIN_RESULT="0"
+  MIN_RESULT="0"
 
-MIN(){
+  MIN() {
     MAX="5000"
     PIFS=$IFS
     IFS=":"
     for num in $1; do
-        if [[ $num -lt $MAX ]]; then
-            MAX=$num
-        fi
+      if [[ $num -lt $MAX ]]; then
+        MAX=$num
+      fi
     done
     IFS=$PIFS
     MIN_RESULT=$MAX
-}
+  }
 
-CHANNELS=("2412" "2417" "2422" "2427" "2432" "2437" "2442" "2447" "2452" "2457" "2462" "2467" "2472" "2482")
-SCORE_2G=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
+  CHANNELS=("2412" "2417" "2422" "2427" "2432" "2437" "2442" "2447" "2452" "2457" "2462" "2467" "2472" "2482")
+  SCORE_2G=(0 0 0 0 0 0 0 0 0 0 0 0 0 0)
 
-BAD_SIG=-75
-WEAK_SIG=-65
-MED_SIG=-55
+  BAD_SIG=-75
+  WEAK_SIG=-65
+  MED_SIG=-55
 
-CHINFO(){
+  CHINFO() {
     SIG=$2
     HOW_BAD=1
     if [[ $SIG -lt $BAD_SIG ]]; then
-        HOW_BAD=16
+      HOW_BAD=16
     elif [[ $SIG -lt $WEAK_SIG ]]; then
-        HOW_BAD=4
+      HOW_BAD=4
     elif [[ $SIG -lt $MED_SIG ]]; then
-        HOW_BAD=2
+      HOW_BAD=2
     fi
     SCORE_2G[$1]=$((${SCORE_2G[$1]} + $HOW_BAD))
     #IV=$(($1 + 1))
     #echo "$IV"
-}
+  }
 
-G2_OVERLAP(){
+  G2_OVERLAP() {
     HW=$(($2 / 2))
-    LTP=$(($1 + $HW ))
-    LBTM=$(($1 - $HW ))
+    LTP=$(($1 + $HW))
+    LBTM=$(($1 - $HW))
     INDEX=0
     CHANNEL=0
     #echo "$LTP $LBTM"
     for CHN in ${CHANNELS[@]}; do
-        if [[ $CHN -eq $FREQ ]]; then
-            CHANNEL=$(($INDEX + 1))
-        fi
-        if [[ $CHN -le $LTP && $LBTM -le $CHN ]]; then
-            CHINFO $INDEX $3 $CHN
-        fi
+      if [[ $CHN -eq $FREQ ]]; then
+        CHANNEL=$(($INDEX + 1))
+      fi
+      if [[ $CHN -le $LTP && $LBTM -le $CHN ]]; then
+        CHINFO $INDEX $3 $CHN
+      fi
 
-        INDEX=$(($INDEX + 1))
+      INDEX=$(($INDEX + 1))
     done
     #echo "channel:$CHANNEL"
-}
+  }
 
-
-PIFS=$IFS
-IFS="~"
-for data in $WILE; do
-    SSID=$(echo "$data" | sed -nE "s/(.*[[:space:]]SSID: .*)$/\1/p" )
+  PIFS=$IFS
+  IFS="~"
+  for data in $WILE; do
+    SSID=$(echo "$data" | sed -nE "s/(.*[[:space:]]SSID: .*)$/\1/p")
     SSID="${SSID//[[:space:]]SSID: /}"
     SIG=$(echo "$data" | sed -nE "s/.*signal:(.*) dBm$/\1/p")
     SIG=$(echo "$SIG" | sed -nE "s/(.*).00/\1/p")
@@ -83,63 +85,97 @@ for data in $WILE; do
     WIDTH=$(echo "$data" | sed -nE "s/.*channel width: (.*).*\).*$/\1/p")
     WIDTHN=$(echo "$data" | sed -nE "s/.*channel width: (.*) MHz$/\1/p")
     if [[ -z $WIDTH ]]; then
-        WIDTH=$WIDTHN
+      WIDTH=$WIDTHN
     else
-        WIDTH=$(echo "$WIDTH" | sed "s/^[0-9]//g")
-        WIDTH="${WIDTH//(/}"
-        WIDTH="${WIDTH//)/}"
-        WIDTH="${WIDTH//
+      WIDTH=$(echo "$WIDTH" | sed "s/^[0-9]//g")
+      WIDTH="${WIDTH//(/}"
+      WIDTH="${WIDTH//)/}"
+      WIDTH="${WIDTH//
 /}"
-        WIDTH=$(echo "$WIDTH" | sed "s/[[:alpha:]]//g")
-        WIDTH=$(echo "$WIDTH" | sed "s/[[:space:]]/:/g")
-        WIDTH=$(echo "$WIDTH" | sed "s/::/:/g")
-        WIDTH=$(echo "$WIDTH" | sed "s/^://g")
-        WIDTH=$(echo "$WIDTH" | sed "s/:$//g")
+      WIDTH=$(echo "$WIDTH" | sed "s/[[:alpha:]]//g")
+      WIDTH=$(echo "$WIDTH" | sed "s/[[:space:]]/:/g")
+      WIDTH=$(echo "$WIDTH" | sed "s/::/:/g")
+      WIDTH=$(echo "$WIDTH" | sed "s/^://g")
+      WIDTH=$(echo "$WIDTH" | sed "s/:$//g")
     fi
     if [[ -z $WIDTH ]]; then
-        WIDTH="20"
+      WIDTH="20"
     fi
     MIN $WIDTH
     WIDTH=$MIN_RESULT
     #echo "WIDTH:$WIDTH"
     if [[ -z $SSID ]]; then
-        SSID="Unknown"
+      SSID="Unknown"
     fi
     if [[ $FREQ -lt 3000 ]]; then
 
-        G2_OVERLAP $FREQ $WIDTH $SIG
+      G2_OVERLAP $FREQ $WIDTH $SIG
     fi
     #5G not supported yet
     #CHINFO $FREQ $WIDTH $SIG
     #echo "FREQ:$FREQ"
     #echo "SIG:$SIG"
     #echo "SSID:$SSID"
-done
-IFS=$PIFS
+  done
+  IFS=$PIFS
 
-BEST_CH=1
-MIN_SCORE="5000"
-CHNUM=1
-for score in ${SCORE_2G[@]}; do
+  BEST_CH=1
+  MIN_SCORE="5000"
+  CHNUM=1
+  for score in ${SCORE_2G[@]}; do
     if [[ ! -z $3 ]]; then
-        if [[ $CHNUM -ge $3 ]]; then
-            break
-        fi
+      if [[ $CHNUM -ge $3 ]]; then
+        break
+      fi
     fi
     echo "channel:$CHNUM score:$score"
     if [[ $score -lt $MIN_SCORE ]]; then
-        MIN_SCORE=$score
-        BEST_CH=$CHNUM
+      MIN_SCORE=$score
+      BEST_CH=$CHNUM
     fi
     CHNUM=$(($CHNUM + 1))
-done
+  done
 
-echo "best channel:$BEST_CH"
+  echo "best channel:$BEST_CH"
+  CHIN=$(($BEST_CH - 1))
+  BEST_CHANNEL[$CHIN]=$((${BEST_CHANNEL[$CHIN]} + 1))
 
-if [[ ! -z $2 ]]; then
-    CONF_FILE=$(cat "$2")
-    if [[ ! -z $CONF_FILE ]]; then
+  if [[ -z $4 ]]; then
+    if [[ ! -z $2 ]]; then
+      CONF_FILE=$(cat "$2")
+      if [[ ! -z $CONF_FILE ]]; then
+        echo "INFO: config write"
         CONF_FILE=$(echo "$CONF_FILE" | sed "s/.*channel=[0-9].*/channel=$BEST_CH/g")
+        echo "$CONF_FILE" >"$2"
+      fi
     fi
-    echo "$CONF_FILE" > "$2"
+  fi
+}
+
+Scan_net $1 $2 $3 $4
+
+SC_COUNT=1
+if [[ ! -z $4 ]]; then
+  while [ $SC_COUNT -lt $4 ]; do
+    sleep 1
+    Scan_net $1 $2 $3 $4
+    SC_COUNT=$(($SC_COUNT + 1))
+  done
+  BEST_CH_CUME=0
+  INDEX=1
+  for CHSC in ${BEST_CHANNEL[@]}; do
+    if [[ $CHSC -gt $BEST_CH_CUME ]]; then
+      BEST_CH_CUME=$INDEX
+    fi
+    INDEX=$(($INDEX + 1))
+  done
+
+  CONF_FILE=$(cat "$2")
+  if [[ ! -z $CONF_FILE ]]; then
+    echo "INFO: config write"
+    CONF_FILE=$(echo "$CONF_FILE" | sed "s/.*channel=[0-9].*/channel=$BEST_CH_CUME/g")
+    echo "$CONF_FILE" >"$2"
+  fi
+  echo "---------"
+  echo "cummulative best channel: $BEST_CH_CUME"
 fi
