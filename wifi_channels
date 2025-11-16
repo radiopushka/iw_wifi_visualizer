@@ -128,17 +128,19 @@ BSS /
         break
       fi
     fi
-    echo "channel:$CHNUM score:$score"
+    if [[ -z $4 ]]; then
+      echo "channel:$CHNUM score:$score"
+    fi
     if [[ $score -lt $MIN_SCORE ]]; then
       MIN_SCORE=$score
       BEST_CH=$CHNUM
     fi
+    INDEX_V=$(($CHNUM - 1))
+    BEST_CHANNEL[$INDEX_V]=$((${BEST_CHANNEL[$INDEX_V]} + $score))
     CHNUM=$(($CHNUM + 1))
   done
 
   echo "best channel:$BEST_CH"
-  CHIN=$(($BEST_CH - 1))
-  BEST_CHANNEL[$CHIN]=$((${BEST_CHANNEL[$CHIN]} + 1))
 
   if [[ -z $4 ]]; then
     if [[ ! -z $2 ]]; then
@@ -161,11 +163,20 @@ if [[ ! -z $4 ]]; then
     Scan_net $1 $2 $3 $4
     SC_COUNT=$(($SC_COUNT + 1))
   done
-  BEST_CH_CUME=0
+  BEST_CH_CUME="10000000000"
+  SINDEX=0
   INDEX=1
   for CHSC in ${BEST_CHANNEL[@]}; do
-    if [[ $CHSC -gt $BEST_CH_CUME ]]; then
-      BEST_CH_CUME=$INDEX
+    if [[ ! -z $3 ]]; then
+      if [[ $INDEX -ge $3 ]]; then
+        break
+      fi
+    fi
+
+    echo "channel:$INDEX score:$CHSC"
+    if [[ $CHSC -lt $BEST_CH_CUME ]]; then
+      BEST_CH_CUME=$CHSC
+      SINDEX=$INDEX
     fi
     INDEX=$(($INDEX + 1))
   done
@@ -173,9 +184,9 @@ if [[ ! -z $4 ]]; then
   CONF_FILE=$(cat "$2")
   if [[ ! -z $CONF_FILE ]]; then
     echo "INFO: config write"
-    CONF_FILE=$(echo "$CONF_FILE" | sed "s/.*channel=[0-9].*/channel=$BEST_CH_CUME/g")
+    CONF_FILE=$(echo "$CONF_FILE" | sed "s/.*channel=[0-9].*/channel=$SINDEX/g")
     echo "$CONF_FILE" >"$2"
   fi
   echo "---------"
-  echo "cummulative best channel: $BEST_CH_CUME"
+  echo "cummulative best channel: $SINDEX"
 fi
