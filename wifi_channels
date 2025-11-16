@@ -1,0 +1,133 @@
+#!/bin/bash
+
+if [[ -z $1 ]]; then
+    echo "Please specify the interface"
+    exit
+fi
+
+WILE=$(iw dev "$1" scan)
+if [[ -z $WILE ]]; then
+    exit
+fi
+WILE="${WILE//
+BSS /
+~BSS }"
+
+MIN_RESULT="0"
+
+MIN(){
+    MAX="5000"
+    PIFS=$IFS
+    IFS=":"
+    for num in $1; do
+        if [[ $num -lt $MAX ]]; then
+            MAX=$num
+        fi
+    done
+    IFS=$PIFS
+    MIN_RESULT=$MAX
+}
+
+CHANNELS=("2412" "2417" "2422" "2427" "2432" "2437" "2442" "2447" "2452" "2457" "2462" "2467" "2472" "2482")
+CONGESTION_2G=(0 0 0 0 0 0 0 0 0 0 0 0 0)
+SCORE_2G=(0 0 0 0 0 0 0 0 0 0 0 0 0)
+
+BAD_SIG=-75
+WEAK_SIG=-65
+MED_SIG=-55
+
+CHINFO(){
+    SIG=$2
+    HOW_BAD=1
+    if [[ $SIG -lt $BAD_SIG ]]; then
+        HOW_BAD=16
+    elif [[ $SIG -lt $WEAK_SIG ]]; then
+        HOW_BAD=4
+    elif [[ $SIG -lt $MED_SIG ]]; then
+        HOW_BAD=2
+    fi
+    SCORE_2G[$1]=$((${SCORE_2G[$1]} + $HOW_BAD))
+    #IV=$(($1 + 1))
+    #echo "$IV"
+}
+
+G2_OVERLAP(){
+    HW=$(($2 / 2))
+    LTP=$(($1 + $HW ))
+    LBTM=$(($1 - $HW ))
+    INDEX=0
+    CHANNEL=0
+    #echo "$LTP $LBTM"
+    for CHN in ${CHANNELS[@]}; do
+        if [[ $CHN -eq $FREQ ]]; then
+            CHANNEL=$(($INDEX + 1))
+        fi
+        if [[ $CHN -le $LTP && $LBTM -le $CHN ]]; then
+            CHINFO $INDEX $3 $CHN
+        fi
+
+        INDEX=$(($INDEX + 1))
+    done
+    #echo "channel:$CHANNEL"
+}
+
+
+PIFS=$IFS
+IFS="~"
+for data in $WILE; do
+    SSID=$(echo "$data" | sed -nE "s/(.*[[:space:]]SSID: .*)$/\1/p" )
+    SSID="${SSID//[[:space:]]SSID: /}"
+    SIG=$(echo "$data" | sed -nE "s/.*signal:(.*) dBm$/\1/p")
+    SIG=$(echo "$SIG" | sed -nE "s/(.*).00/\1/p")
+    FREQ=$(echo "$data" | sed -nE "s/.*freq:(.*)$/\1/p")
+    FREQ=$(echo "$FREQ" | sed -nE "s/(.*).0/\1/p")
+    WIDTH=$(echo "$data" | sed -nE "s/.*channel width: (.*).*\).*$/\1/p")
+    WIDTHN=$(echo "$data" | sed -nE "s/.*channel width: (.*) MHz$/\1/p")
+    if [[ -z $WIDTH ]]; then
+        WIDTH=$WIDTHN
+    else
+        WIDTH=$(echo "$WIDTH" | sed "s/^[0-9]//g")
+        WIDTH="${WIDTH//(/}"
+        WIDTH="${WIDTH//)/}"
+        WIDTH="${WIDTH//
+/}"
+        WIDTH=$(echo "$WIDTH" | sed "s/[[:alpha:]]//g")
+        WIDTH=$(echo "$WIDTH" | sed "s/[[:space:]]/:/g")
+        WIDTH=$(echo "$WIDTH" | sed "s/::/:/g")
+        WIDTH=$(echo "$WIDTH" | sed "s/^://g")
+        WIDTH=$(echo "$WIDTH" | sed "s/:$//g")
+    fi
+    if [[ -z $WIDTH ]]; then
+        WIDTH="20"
+    fi
+    MIN $WIDTH
+    WIDTH=$MIN_RESULT
+    #echo "WIDTH:$WIDTH"
+    if [[ -z $SSID ]]; then
+        SSID="Unknown"
+    fi
+    if [[ $FREQ -lt 3000 ]]; then
+
+        G2_OVERLAP $FREQ $WIDTH $SIG
+    fi
+    #5G not supported yet
+    #CHINFO $FREQ $WIDTH $SIG
+    #echo "FREQ:$FREQ"
+    #echo "SIG:$SIG"
+    #echo "SSID:$SSID"
+done
+IFS=$PIFS
+
+BEST_CH=1
+MIN_SCORE="5000"
+CHNUM=1
+for score in ${SCORE_2G[@]}; do
+    echo "channel:$CHNUM score:$score"
+    if [[ $score -lt $MIN_SCORE ]]; then
+        MIN_SCORE=$score
+        BEST_CH=$CHNUM
+    fi
+    CHNUM=$(($CHNUM + 1))
+done
+
+echo "best channel:$BEST_CH"
